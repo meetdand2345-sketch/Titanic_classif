@@ -1,0 +1,117 @@
+import numpy as np
+import pandas as pd
+import os
+import kagglehub
+
+kagglehub.login()
+titanic_path = kagglehub.competition_download('titanic')
+INPUT_DIR = '/kaggle/input/titanic/'
+train = pd.read_csv(os.path.join(INPUT_DIR, 'train.csv'))
+test = pd.read_csv(os.path.join(INPUT_DIR, 'test.csv'))
+
+
+test_ids = test['PassengerId']
+
+# -------------------------
+# Feature: Title
+# -------------------------
+def extract_title(name):
+    return name.split(',')[1].split('.')[0].strip()
+
+train['Title'] = train['Name'].apply(extract_title)
+test['Title'] = test['Name'].apply(extract_title)
+
+# Normalize titles
+train['Title'] = train['Title'].replace({
+    'Mlle':'Miss', 'Ms':'Miss', 'Mme':'Mrs'
+})
+test['Title'] = test['Title'].replace({
+    'Mlle':'Miss', 'Ms':'Miss', 'Mme':'Mrs'
+})
+
+rare_titles = [
+    'Lady','Countess','the Countess','Capt','Col','Don',
+    'Dr','Major','Rev','Sir','Jonkheer','Dona'
+]
+
+train['Title'] = train['Title'].replace(rare_titles, 'Rare')
+test['Title'] = test['Title'].replace(rare_titles, 'Rare')
+
+title_map = {'Mr':0, 'Miss':1, 'Mrs':2, 'Master':3, 'Rare':4}
+train['Title'] = train['Title'].replace(title_map)
+test['Title'] = test['Title'].replace(title_map)
+
+# -------------------------
+# Family features
+# -------------------------
+train['FamilySize'] = train['SibSp'] + train['Parch'] + 1
+test['FamilySize'] = test['SibSp'] + test['Parch'] + 1
+
+train['IsAlone'] = (train['FamilySize'] == 1).astype(int)
+test['IsAlone'] = (test['FamilySize'] == 1).astype(int)
+
+# -------------------------
+# Encode Sex
+# -------------------------
+train['Sex'] = train['Sex'].replace({'male':0, 'female':1})
+test['Sex'] = test['Sex'].replace({'male':0, 'female':1})
+
+# -------------------------
+# Encode Embarked
+# -------------------------
+train['Embarked'] = train['Embarked'].fillna(train['Embarked'].mode()[0])
+test['Embarked'] = test['Embarked'].fillna(test['Embarked'].mode()[0])
+
+train['Embarked'] = train['Embarked'].replace({'S':0, 'C':1, 'Q':2})
+test['Embarked'] = test['Embarked'].replace({'S':0, 'C':1, 'Q':2})
+
+# -------------------------
+# SIMPLE Age fill (IMPORTANT)
+# -------------------------
+train['Age'] = train['Age'].fillna(train['Age'].median())
+test['Age'] = test['Age'].fillna(test['Age'].median())
+
+# -------------------------
+# Fare fill
+# -------------------------
+train['Fare'] = train['Fare']/train['FamilySize']
+test['Fare'] = test['Fare']/test['FamilySize']
+train['Fare'] = train['Fare'].fillna(train['Fare'].median())
+test['Fare'] = test['Fare'].fillna(test['Fare'].median())
+
+# -------------------------
+# Drop unused columns
+# -------------------------
+drop_cols = ['Name','Ticket','Cabin','SibSp','Parch','PassengerId']
+train.drop(columns=drop_cols, inplace=True)
+test.drop(columns=drop_cols, inplace=True)
+
+# -------------------------
+# Prepare data
+# -------------------------
+X = train.drop('Survived', axis=1)
+y = train['Survived']
+X_test = test
+
+# Final safety
+X = X.fillna(0)
+X_test = X_test.fillna(0)
+
+# -------------------------
+# Model: Logistic Regression
+# -------------------------
+from sklearn.linear_model import LogisticRegression
+
+model = LogisticRegression(max_iter=1000)
+model.fit(X, y)
+preds = model.predict(X_test)
+
+# -------------------------
+# Submission
+# -------------------------
+submission = pd.DataFrame({
+    'PassengerId': test_ids,
+    'Survived': preds
+})
+
+submission.to_csv('/kaggle/working/submission.csv', index=False)
