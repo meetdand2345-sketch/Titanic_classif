@@ -106,12 +106,3 @@ model = LogisticRegression(max_iter=1000)
 model.fit(X, y)
 preds = model.predict(X_test)
 
-# -------------------------
-# Submission
-# -------------------------
-submission = pd.DataFrame({
-    'PassengerId': test_ids,
-    'Survived': preds
-})
-
-submission.to_csv('/kaggle/working/submission.csv', index=False)
